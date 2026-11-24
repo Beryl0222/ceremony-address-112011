@@ -26,3 +26,59 @@ python3 -m corpus
 python3 -m corpus requests --id M6
 python3 -m unittest discover -s tests -v
 ```
+
+## 司仪/礼宾协同工作台（workbench 包）
+
+`workbench/` 在不改动原始资料的前提下，把报名名单、亲友留言、司仪稿、舞台时段
+和已分发卡片接成一条可审计链路。原始 JSON 逐字保留，所有解析结果都带留言 id 与
+原文偏移，事后可回到原件核对。隔离模式（`-I`）下用根目录的 `run_workbench.py`
+启动，避免加载到工作目录中的同名模块。
+
+### 模块分工
+
+| 模块 | 职责 |
+| --- | --- |
+| `parser.py` | 确定性切句、指称与行动诉求抽取；重名只留候选不武断归并 |
+| `resolver.py` | 结合发言人、家庭/场次、上下文显著性消歧；学习别名、亲属、座位 |
+| `consent.py` | 本人同意才算授权；亲属建议只挂起；后续留言可撤回旧安排 |
+| `actions.py` | 行动对账、座位描述与邀请区分、冲突检测、岗位约定（B2/B3） |
+| `script.py` | 留言转口播句、授权校验、未授权称呼用家庭认可泛称兜底 |
+| `cards.py` | 行动卡版本、跨岗更正按岗回执、暂止、回退说法 |
+| `thanks.py` | 两方家庭在致谢/致礼环节各自决定，互不代签 |
+| `audit.py` | 内部审计证据链与只含同意表述的公开存档 |
+| `workbench.py` | 门面，按时间顺序组织上述模块并提供司仪/礼宾岗位视图 |
+
+### 关键规则如何落地
+
+- **指代辨认**：自称只归发言人；“林女士是我姐姐”经同位语归到姐姐；“对方外婆”
+  按家庭限定跨家庭定位；两位“阿槐/林晚”凭家庭、场次与“与我无关”声明区分。
+- **三类语段**：主持用语、家庭转述、礼宾行动请求分别归类；“坐东一排/让她坐前排”
+  是座位描述，不生成上台邀请。
+- **后台注记隔离**：登记名与读音按 `读音范围` 控制可见岗位，未授权词形不进公开稿；
+  公开存档只保留 `范围=公开` 且本人同意的表述。
+- **同意边界**：亲属（如 P2）建议的“台口接受致礼”进入待核实，向当事人 P4 本人
+  核实，绝不直接生效；本人 M6 的“不起身”撤回 M3 的起身安排。
+- **冲突处理**：同一人互斥位置/动作保留双方并交现场负责人；否定类动作（不起身、
+  不去台口）彼此兼容，共同表示留在座位。
+- **跨岗更正**：未被该岗回执的更正不成为可执行版本，现场不会出现互相矛盾的指令；
+  环节开始后的更正 `lead_only`，只能由现场负责人启用已同意的回退说法。
+- **泛称兜底**：未解决指代不导致错叫，改用家庭认可的“亲友”让无关环节继续，且
+  泛称永不派生行动指令。
+
+### 命令与演示
+
+```text
+python3 -I run_workbench.py overview
+python3 -I run_workbench.py mentions M1
+python3 -I run_workbench.py tasks
+python3 -I run_workbench.py host S2
+python3 -I run_workbench.py concierge S2
+python3 -I run_workbench.py thanks S2
+python3 -I run_workbench.py corrections
+python3 -I run_workbench.py evidence 外婆
+python3 -I run_workbench.py archive
+python3 -I demo/run_demo.py
+```
+
+工作台测试位于 `tests/workbench_tests/`，与原 `tests/test_corpus.py` 一并由
+`python3 -m unittest discover -s tests` 运行。
